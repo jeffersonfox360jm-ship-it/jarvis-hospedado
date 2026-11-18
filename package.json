@@ -1,0 +1,12 @@
+{
+  "name": "jarvis-hospedado",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "J.A.R.V.I.S. com player do YouTube embutido e comandos de voz",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.*"
+  },
+  "engines": { "node": ">=20" }
+}

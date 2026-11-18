@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#050b14">
+<title>J.A.R.V.I.S.</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<header>
+  <span class="logo">J.A.R.V.I.S.</span>
+  <span class="chip" id="chipVoz"><i></i>VOZ</span>
+  <span class="chip" id="chipYt"><i></i>YOUTUBE</span>
+  <span class="chip" id="chipIa"><i></i>IA</span>
+</header>
+
+<main>
+  <section class="palco">
+    <div class="player-wrap" id="playerWrap" hidden><div id="player"></div></div>
+    <div class="orbe" id="orbe" aria-hidden="true"><div class="anel"></div><div class="nucleo"></div></div>
+    <div class="estado" id="estado" role="status">INICIANDO</div>
+    <div class="ouvi" id="ouvi" aria-live="polite"></div>
+    <div class="controles" id="controles" hidden>
+      <button class="btn" id="bAnt" type="button" aria-label="Anterior">⏮</button>
+      <button class="btn" id="bPlay" type="button" aria-label="Pausar ou continuar">⏯</button>
+      <button class="btn" id="bProx" type="button" aria-label="Próximo">⏭</button>
+      <button class="btn" id="bParar" type="button" aria-label="Fechar o vídeo">✕</button>
+      <button class="btn" id="bTrans" type="button" aria-pressed="false" title="Escrever a letra do que está tocando">📝 Escrever letra</button>
+      <button class="btn" id="bCC" type="button" aria-pressed="true" title="Legendas automáticas do YouTube no player">CC</button>
+    </div>
+    <section class="trans" id="trans" hidden aria-label="Transcrição ao vivo">
+      <div class="trans-top"><strong>📝 Letra / transcrição ao vivo</strong><span class="trans-st" id="transSt"></span></div>
+      <ol class="trans-linhas" id="transLinhas"></ol>
+      <div class="trans-acoes">
+        <button class="btn" id="tDesc" type="button">✨ Descrever a música</button>
+        <button class="btn" id="tCopiar" type="button">Copiar</button>
+        <button class="btn" id="tBaixar" type="button">Baixar .txt</button>
+        <button class="btn" id="tLimpar" type="button">Limpar</button>
+      </div>
+    </section>
+  </section>
+
+  <section class="lado">
+    <ol class="lista" id="lista" aria-label="Resultados do YouTube"></ol>
+    <div class="log" id="log" aria-live="polite"></div>
+    <form id="form" class="entrada">
+      <button class="mic" id="mic" type="button" aria-label="Ligar ou desligar o microfone">🎙️</button>
+      <input id="txt" autocomplete="off" placeholder='Diga ou digite: "toca Evidências"' aria-label="Comando">
+      <button class="btn" type="submit">Enviar</button>
+    </form>
+    <p class="dica">Comandos: "toca …", "coloca vídeo de …", "pausa", "continua", "próxima", "anterior", "abre o 2", "aumenta o volume", "volume 50", "para". Com o vídeo tocando, comece com "Jarvis" para ele ouvir você e não o vídeo. "Jarvis, escreve a letra" liga a transcrição; "Jarvis, descreve a música" explica a música.</p>
+  </section>
+</main>
+
+<div class="capa" id="capa">
+  <div class="caixa">
+    <div class="logo grande">J.A.R.V.I.S.</div>
+    <form id="pinForm" hidden>
+      <label for="pin">PIN de acesso</label>
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" required>
+      <button class="btn" type="submit">Entrar</button>
+      <p class="erro" id="pinErro" role="alert"></p>
+    </form>
+    <button class="btn grande" id="ativar" type="button" hidden>▶ Ativar J.A.R.V.I.S.</button>
+    <label class="opcao" id="opTrans" hidden><input type="checkbox" id="cTrans" checked> Escrever a letra do que tocar <small>(computador: escolha "Esta aba" e marque "Compartilhar áudio da aba")</small></label>
+    <p class="dica" id="capaDica">Um toque libera o microfone e o som. Depois é só falar.</p>
+  </div>
+</div>
+
+<script src="comandos.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

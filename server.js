@@ -7,7 +7,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), 'public');
-const env = process.env;
+const env = Object.fromEntries(Object.entries(process.env).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
 const CFG = {
   port: Number(env.PORT || 3000),
   pin: (env.APP_PIN || '').trim(),
@@ -58,7 +58,16 @@ async function youtubeSearch(q, musica) {
   if (musica) p.set('videoCategoryId', '10');
   const r = await fetch(`${CFG.ytBase}/search?${p}`);
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { const reason = j?.error?.errors?.[0]?.reason || j?.error?.status || r.status; throw Object.assign(new Error(reason === 'quotaExceeded' ? 'cota diária da API do YouTube esgotada; volta amanhã' : `YouTube respondeu ${reason}`), { status: 502 }); }
+  if (!r.ok) {
+    const reason = j?.error?.errors?.[0]?.reason || j?.error?.status || r.status;
+    const texto = String(j?.error?.message || '');
+    const msg = reason === 'quotaExceeded' ? 'cota diária da API do YouTube esgotada; volta amanhã'
+      : /api key not valid|keyInvalid/i.test(texto + reason) ? 'a chave do YouTube não é válida: confira YOUTUBE_API_KEY no Render (deve começar com AIza)'
+      : /has not been used|disabled|accessNotConfigured/i.test(texto + reason) ? 'a YouTube Data API v3 não está ativada no projeto dessa chave'
+      : /blocked|API_KEY_SERVICE_BLOCKED|forbidden/i.test(texto + reason) ? 'a chave do YouTube está bloqueada para a YouTube Data API v3 (restrições da chave)'
+      : `YouTube respondeu ${reason}`;
+    throw Object.assign(new Error(msg), { status: 502 });
+  }
   const data = (j.items || []).filter((i) => i.id?.videoId).map((i) => ({
     id: i.id.videoId,
     titulo: decodeEntities(i.snippet?.title || ''),
@@ -69,6 +78,15 @@ async function youtubeSearch(q, musica) {
   return data;
 }
 const decodeEntities = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+// Mensagem de erro sem risco de vazar a chave: só o código HTTP ou um aviso genérico.
+function erroSeguro(e) {
+  const m = String((e && e.message) || '');
+  if (/^HTTP \d{3}$/.test(m)) return m === 'HTTP 401' || m === 'HTTP 403' ? `${m} (chave recusada: confira a chave no Render)` : m;
+  if (/aborted|timeout/i.test(m)) return 'sem resposta a tempo';
+  if (/header|Bearer|invalid/i.test(m)) return 'chave com formato inválido (confira se colou a chave certa, sem espaços)';
+  return 'falha de conexão';
+}
 
 // ---------- Conversa (Groq → OpenAI → Gemini, com fallback) ----------
 const SYSTEM = 'Você é o J.A.R.V.I.S., assistente pessoal: elegante, leal, calmo e direto. Responda em português do Brasil. A resposta será falada em voz alta: no máximo 3 frases curtas, sem listas, markdown ou emojis. Você também controla um player de YouTube nesta página: se o usuário pedir música ou vídeo, diga para ele falar "toca" e o nome. Não invente fatos.';
@@ -85,7 +103,7 @@ async function chat(messages) {
       const r = await fetch(`${p.url}/models/${encodeURIComponent(p.model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': p.key }, body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents: messages.slice(-12).map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })), generationConfig: { temperature: 0.5, maxOutputTokens: 400 } }), signal: AbortSignal.timeout(30_000) });
       const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return { texto: (j.candidates?.[0]?.content?.parts || []).map((x) => x.text || '').join('').trim(), provedor: p.id };
-    } catch (e) { erros.push(`${p.id}: ${e.message}`); }
+    } catch (e) { erros.push(`${p.id}: ${erroSeguro(e)}`); }
   }
   throw Object.assign(new Error(CFG.providers.length ? `nenhum provedor respondeu (${erros.join('; ')})` : 'nenhum provedor de IA configurado'), { status: 502 });
 }
@@ -105,7 +123,7 @@ async function transcrever(audio, tipo, contexto) {
       const r = await fetch(p.url, { method: 'POST', headers: { authorization: `Bearer ${p.key}` }, body: fd, signal: AbortSignal.timeout(45_000) });
       const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return { texto: limpaTranscricao(j.text), provedor: p.id };
-    } catch (e) { erros.push(`${p.id}: ${e.message}`); }
+    } catch (e) { erros.push(`${p.id}: ${erroSeguro(e)}`); }
   }
   throw Object.assign(new Error(CFG.transcricao.length ? `transcrição falhou (${erros.join('; ')})` : 'configure GROQ_API_KEY ou OPENAI_API_KEY para transcrever'), { status: 502 });
 }
@@ -113,6 +131,15 @@ async function lerBinario(req, max) {
   let size = 0; const chunks = [];
   for await (const c of req) { size += c.length; if (size > max) throw Object.assign(new Error('áudio grande demais'), { status: 413 }); chunks.push(c); }
   return Buffer.concat(chunks);
+}
+
+function avisosDeConfiguracao() {
+  const a = [];
+  if (CFG.ytKey && !/^AIza[0-9A-Za-z_-]{30,}$/.test(CFG.ytKey)) a.push('YOUTUBE_API_KEY não parece uma chave do Google (deve começar com AIza)');
+  if (env.GROQ_API_KEY && !/^gsk_[A-Za-z0-9]{20,}$/.test(env.GROQ_API_KEY)) a.push('GROQ_API_KEY não parece uma chave da Groq (deve começar com gsk_)');
+  if (env.OPENAI_API_KEY && !/^sk-[A-Za-z0-9_-]{20,}$/.test(env.OPENAI_API_KEY)) a.push('OPENAI_API_KEY não parece uma chave da OpenAI (deve começar com sk-)');
+  if (!CFG.pin) a.push('APP_PIN não definido: qualquer pessoa com o link usa as suas chaves');
+  return a;
 }
 
 // ---------- HTTP ----------
@@ -137,7 +164,7 @@ export function createServer() {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://x');
     try {
-      if (url.pathname === '/health') return send(res, 200, { ok: true, youtube: Boolean(CFG.ytKey), ia: CFG.providers.map((p) => p.id), transcricao: CFG.transcricao.map((p) => p.id), pin: Boolean(CFG.pin) });
+      if (url.pathname === '/health') return send(res, 200, { ok: true, youtube: Boolean(CFG.ytKey), ia: CFG.providers.map((p) => p.id), transcricao: CFG.transcricao.map((p) => p.id), pin: Boolean(CFG.pin), avisos: avisosDeConfiguracao() });
 
       if (url.pathname === '/api/session' && req.method === 'GET') return send(res, 200, { ok: authed(req), pin: Boolean(CFG.pin), youtube: Boolean(CFG.ytKey), ia: CFG.providers.length > 0, transcricao: CFG.transcricao.length > 0 });
 
@@ -198,6 +225,6 @@ export function createServer() {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   createServer().listen(CFG.port, () => {
     console.log(`J.A.R.V.I.S. no ar na porta ${CFG.port} · YouTube: ${CFG.ytKey ? 'ok' : 'SEM CHAVE'} · IA: ${CFG.providers.map((p) => p.id).join(', ') || 'nenhuma'} · PIN: ${CFG.pin ? 'ativo' : 'DESLIGADO'}`);
-    if (!CFG.pin) console.warn('Aviso: defina APP_PIN para que só você use as suas chaves.');
+    for (const a of avisosDeConfiguracao()) console.warn('Aviso: ' + a);
   });
 }

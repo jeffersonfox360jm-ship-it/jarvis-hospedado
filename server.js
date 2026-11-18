@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), 'public');
 const env = Object.fromEntries(Object.entries(process.env).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
+// Formato esperado de cada chave: evita usar (e mandar para fora) um valor colado no lugar errado.
+const FORMATOS = { groq: /^gsk_[A-Za-z0-9]{20,}$/, openai: /^sk-[A-Za-z0-9_-]{20,}$/, gemini: /^AIza[0-9A-Za-z_-]{30,}$/ };
+const formatoOk = (id, key) => !FORMATOS[id] || FORMATOS[id].test(String(key || '')) || env.ACEITAR_QUALQUER_CHAVE === '1';
 const CFG = {
   port: Number(env.PORT || 3000),
   pin: (env.APP_PIN || '').trim(),
@@ -19,12 +22,13 @@ const CFG = {
     { id: 'groq', key: env.GROQ_API_KEY, model: env.MODEL_GROQ, url: (env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1') + '/chat/completions', kind: 'openai' },
     { id: 'openai', key: env.OPENAI_API_KEY, model: env.MODEL_OPENAI, url: (env.OPENAI_BASE_URL || 'https://api.openai.com/v1') + '/chat/completions', kind: 'openai' },
     { id: 'gemini', key: env.GEMINI_API_KEY, model: env.MODEL_GEMINI, url: env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta', kind: 'gemini' },
-  ].filter((p) => p.key && p.model),
+  ].filter((p) => p.key && p.model && formatoOk(p.id, p.key)),
   // Transcrição (Whisper): Groq primeiro, OpenAI depois. Modelos trocáveis por variável de ambiente.
   transcricao: [
-    { id: 'groq', key: env.GROQ_API_KEY, model: env.TRANSCRIBE_MODEL_GROQ || 'whisper-large-v3-turbo', url: (env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1') + '/audio/transcriptions' },
-    { id: 'openai', key: env.OPENAI_API_KEY, model: env.TRANSCRIBE_MODEL_OPENAI || 'whisper-1', url: (env.OPENAI_BASE_URL || 'https://api.openai.com/v1') + '/audio/transcriptions' },
-  ].filter((p) => p.key),
+    { id: 'groq', key: env.GROQ_API_KEY, model: env.TRANSCRIBE_MODEL_GROQ || 'whisper-large-v3-turbo', url: (env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1') + '/audio/transcriptions', kind: 'whisper' },
+    { id: 'openai', key: env.OPENAI_API_KEY, model: env.TRANSCRIBE_MODEL_OPENAI || 'whisper-1', url: (env.OPENAI_BASE_URL || 'https://api.openai.com/v1') + '/audio/transcriptions', kind: 'whisper' },
+    { id: 'gemini', key: env.GEMINI_API_KEY, model: env.TRANSCRIBE_MODEL_GEMINI || env.MODEL_GEMINI, url: env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta', kind: 'gemini' },
+  ].filter((p) => p.key && p.model && formatoOk(p.id, p.key)),
 };
 
 // ---------- Sessão por PIN (cookie assinado, 30 dias) ----------
@@ -116,6 +120,13 @@ async function transcrever(audio, tipo, contexto) {
   const erros = [];
   for (const p of CFG.transcricao) {
     try {
+      if (p.kind === 'gemini') {
+        const pedido = 'Transcreva literalmente, em português, o que é cantado ou falado neste trecho de áudio. Responda só com o texto transcrito, sem comentários, sem aspas e sem marcações. Se o trecho for só instrumental ou silêncio, responda com nada.' + (contexto ? ` Contexto (não repita): ${contexto.slice(-300)}` : '');
+        const r = await fetch(`${p.url}/models/${encodeURIComponent(p.model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': p.key }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: pedido }, { inline_data: { mime_type: tipo, data: Buffer.from(audio).toString('base64') } }] }], generationConfig: { temperature: 0, maxOutputTokens: 400 } }), signal: AbortSignal.timeout(45_000) });
+        const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const bruto = (j.candidates?.[0]?.content?.parts || []).map((x) => x.text || '').join(' ');
+        return { texto: limpaTranscricao(bruto.replace(/\[(?:m[uú]sica|instrumental|sil[eê]ncio|inaud[ií]vel)[^\]]*\]/gi, ' ').replace(/^["“]|["”]$/g, '')), provedor: p.id };
+      }
       const fd = new FormData();
       fd.append('file', new Blob([audio], { type: tipo }), tipo.includes('ogg') ? 'trecho.ogg' : tipo.includes('mp4') ? 'trecho.mp4' : 'trecho.webm');
       fd.append('model', p.model); fd.append('language', 'pt'); fd.append('response_format', 'json'); fd.append('temperature', '0');
@@ -125,7 +136,7 @@ async function transcrever(audio, tipo, contexto) {
       return { texto: limpaTranscricao(j.text), provedor: p.id };
     } catch (e) { erros.push(`${p.id}: ${erroSeguro(e)}`); }
   }
-  throw Object.assign(new Error(CFG.transcricao.length ? `transcrição falhou (${erros.join('; ')})` : 'configure GROQ_API_KEY ou OPENAI_API_KEY para transcrever'), { status: 502 });
+  throw Object.assign(new Error(CFG.transcricao.length ? `transcrição falhou (${erros.join('; ')})` : 'configure GROQ_API_KEY, OPENAI_API_KEY ou GEMINI_API_KEY (com MODEL_GEMINI) para transcrever'), { status: 502 });
 }
 async function lerBinario(req, max) {
   let size = 0; const chunks = [];
@@ -138,6 +149,9 @@ function avisosDeConfiguracao() {
   if (CFG.ytKey && !/^AIza[0-9A-Za-z_-]{30,}$/.test(CFG.ytKey)) a.push('YOUTUBE_API_KEY não parece uma chave do Google (deve começar com AIza)');
   if (env.GROQ_API_KEY && !/^gsk_[A-Za-z0-9]{20,}$/.test(env.GROQ_API_KEY)) a.push('GROQ_API_KEY não parece uma chave da Groq (deve começar com gsk_)');
   if (env.OPENAI_API_KEY && !/^sk-[A-Za-z0-9_-]{20,}$/.test(env.OPENAI_API_KEY)) a.push('OPENAI_API_KEY não parece uma chave da OpenAI (deve começar com sk-)');
+  if (env.GEMINI_API_KEY && !FORMATOS.gemini.test(env.GEMINI_API_KEY)) a.push('GEMINI_API_KEY não parece uma chave do Google (deve começar com AIza)');
+  if (env.GEMINI_API_KEY && !env.MODEL_GEMINI) a.push('MODEL_GEMINI não definido: o Gemini não será usado');
+  if (!CFG.providers.length) a.push('nenhuma IA válida configurada: a conversa não vai responder');
   if (!CFG.pin) a.push('APP_PIN não definido: qualquer pessoa com o link usa as suas chaves');
   return a;
 }

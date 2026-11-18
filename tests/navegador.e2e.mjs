@@ -23,7 +23,7 @@ const mock = http.createServer(async (req, res) => {
 });
 await new Promise((r) => mock.listen(0, '127.0.0.1', r));
 const m = `http://127.0.0.1:${mock.address().port}`;
-Object.assign(process.env, { APP_PIN: '4321', SESSION_SECRET: 's', YOUTUBE_API_KEY: 'k', YOUTUBE_API_BASE: `${m}/yt`, GROQ_API_KEY: 'g', MODEL_GROQ: 'mg', GROQ_BASE_URL: `${m}/groq` });
+Object.assign(process.env, { APP_PIN: '4321', SESSION_SECRET: 's', YOUTUBE_API_KEY: 'k', YOUTUBE_API_BASE: `${m}/yt`, GROQ_API_KEY: 'gsk_aaaaaaaaaaaaaaaaaaaaaaaa', MODEL_GROQ: 'mg', GROQ_BASE_URL: `${m}/groq` });
 const { createServer } = await import('../server.js');
 const srv = createServer(); await new Promise((r) => srv.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${srv.address().port}`;

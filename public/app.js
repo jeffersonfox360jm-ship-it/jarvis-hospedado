@@ -295,6 +295,13 @@
     falar('Sistemas online. O que deseja?');
   };
 
+  // ---------- Abertura: a primeira tela some sozinha e passa para a segunda ----------
+  document.body.classList.add('abrindo');
+  setTimeout(() => {
+    $('abertura').classList.add('sai'); document.body.classList.remove('abrindo');
+    setTimeout(() => { $('abertura').hidden = true; }, 550);
+  }, 2200);
+
   (async () => {
     try {
       const s = await fetch('/api/session', { credentials: 'same-origin' }).then((r) => r.json());

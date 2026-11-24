@@ -16,14 +16,14 @@ main{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;p
 .player-wrap{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--linha);border-radius:12px;overflow:hidden}
 .player-wrap iframe,#player{width:100%;height:100%;display:block;border:0}
 .orbe{position:relative;width:180px;height:180px;margin-top:10px}
-.orbe .anel{position:absolute;inset:0;border-radius:50%;border:3px dashed rgba(79,216,255,.55);animation:gira 14s linear infinite}
+.orbe .anel{position:absolute;inset:0;border-radius:50%;border:3px dashed rgba(79,216,255,.55);animation:gira 3s linear infinite}
 .orbe .nucleo{position:absolute;inset:38%;border-radius:50%;background:radial-gradient(circle,var(--ciano2),var(--ciano) 45%,transparent 72%);box-shadow:0 0 40px rgba(79,216,255,.6);transition:transform .3s}
-body.ouvindo .orbe .anel{border-color:var(--ambar);animation-duration:4s}
+body.ouvindo .orbe .anel{border-color:var(--ambar);animation-duration:1.2s}
 body.ouvindo .orbe .nucleo{background:radial-gradient(circle,#ffe2b0,var(--ambar) 45%,transparent 72%);transform:scale(1.15)}
 body.falando .orbe .nucleo{animation:pulsa .6s ease-in-out infinite alternate}
 body.tocando .orbe{width:90px;height:90px;margin:0}
 @keyframes gira{to{transform:rotate(360deg)}}@keyframes pulsa{to{transform:scale(1.3)}}
-@media (prefers-reduced-motion:reduce){.orbe .anel,body.falando .orbe .nucleo{animation:none}}
+@media (prefers-reduced-motion:reduce){.orbe .anel,body.falando .orbe .nucleo,.abertura .orbe .anel{animation:none}.abertura,.capa .caixa{transition:none!important}}
 .estado{font-size:12px;letter-spacing:.25em;color:var(--ciano2);text-align:center}
 .ouvi{min-height:20px;font-size:14px;color:var(--ambar);text-align:center}
 .controles{display:flex;gap:8px}
@@ -61,3 +61,12 @@ body.tocando .orbe{width:90px;height:90px;margin:0}
 .trans-acoes{display:flex;gap:8px;flex-wrap:wrap}.trans-acoes .btn{padding:6px 10px;font-size:13px}
 .btn[aria-pressed="true"]{background:rgba(255,181,71,.18);border-color:var(--ambar);color:#ffe2b0}
 .opcao{display:flex;gap:8px;align-items:flex-start;text-align:left;font-size:14px;color:var(--txt)}.opcao small{display:block;color:var(--mudo)}.opcao input{margin-top:3px;accent-color:var(--ciano)}
+/* Abertura (splash) estilo Wix: logo + orbe girando rápido; some sozinha e entra a tela seguinte com fade */
+.abertura{position:fixed;inset:0;z-index:20;background:#03080f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;pointer-events:none;transition:opacity .5s ease}
+.abertura .orbe{margin:0;width:150px;height:150px}
+.abertura .orbe .anel{animation-duration:1.1s}
+.abertura .orbe .nucleo{animation:pulsa .8s ease-in-out infinite alternate}
+.abertura .logo{margin:0}
+.abertura.sai{opacity:0}
+.capa .caixa{transition:opacity .5s ease .15s,transform .5s ease .15s}
+body.abrindo .capa .caixa{opacity:0;transform:translateY(16px)}
